@@ -95,6 +95,23 @@ def main_header():
 
 
 
+def normalize_students_df(df: pd.DataFrame) -> pd.DataFrame:
+    required_cols = ["학번", "이름", "학년", "반", "비고"]
+    for col in required_cols:
+        if col not in df.columns:
+            df[col] = ""
+
+    df = df[required_cols].copy()
+    df["학번"] = df["학번"].astype(str).str.strip()
+    df["이름"] = df["이름"].astype(str).str.strip()
+    df["비고"] = df["비고"].fillna("").astype(str)
+    df["학년"] = pd.to_numeric(df["학년"], errors="coerce")
+    df["반"] = pd.to_numeric(df["반"], errors="coerce")
+
+    return df
+
+
+
 def sidebar_controls():
     with st.sidebar:
         st.header("⚙️ 관리 메뉴")
@@ -103,11 +120,8 @@ def sidebar_controls():
         uploaded_students = st.file_uploader("학생 명단 CSV 업로드", type=["csv"])
         if uploaded_students is not None:
             df = pd.read_csv(uploaded_students)
-            required_cols = ["학번", "이름", "학년", "반", "비고"]
-            for col in required_cols:
-                if col not in df.columns:
-                    df[col] = ""
-            st.session_state.students_df = df[required_cols].fillna("")
+            df = normalize_students_df(df)
+            st.session_state.students_df = df
             save_df(st.session_state.students_df, STUDENTS_FILE)
             sync_student_names()
             save_df(st.session_state.career_df, CAREER_FILE)
@@ -148,8 +162,12 @@ def students_tab():
     st.subheader("1) 학생 명단 관리")
     st.write("학생 기본 명단을 입력하거나 수정하세요.")
 
+    editable_students = st.session_state.students_df.copy()
+    editable_students["학년"] = pd.to_numeric(editable_students["학년"], errors="coerce")
+    editable_students["반"] = pd.to_numeric(editable_students["반"], errors="coerce")
+
     edited_students = st.data_editor(
-        st.session_state.students_df,
+        editable_students,
         num_rows="dynamic",
         use_container_width=True,
         hide_index=True,
@@ -164,12 +182,17 @@ def students_tab():
     )
 
     if st.button("학생 명단 저장", key="save_students"):
-        edited_students = edited_students.fillna("")
-        if edited_students["학번"].astype(str).str.strip().eq("").any() or edited_students["이름"].astype(str).str.strip().eq("").any():
+        edited_students = normalize_students_df(edited_students)
+        if edited_students["학번"].eq("").any() or edited_students["이름"].eq("").any():
             st.error("학번과 이름은 비워둘 수 없습니다.")
             return
 
-        edited_students["학번"] = edited_students["학번"].astype(str)
+        if edited_students["학년"].isna().any() or edited_students["반"].isna().any():
+            st.error("학년과 반은 숫자로 입력해주세요.")
+            return
+
+        edited_students["학년"] = edited_students["학년"].astype(int)
+        edited_students["반"] = edited_students["반"].astype(int)
         st.session_state.students_df = edited_students.drop_duplicates(subset=["학번"], keep="last")
         sync_student_names()
         save_df(st.session_state.students_df, STUDENTS_FILE)
