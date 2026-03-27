@@ -74,17 +74,35 @@ def sync_student_names():
     if students_df.empty:
         return
 
+    students_df = normalize_students_df(students_df)
+    students_df["학번"] = students_df["학번"].astype(str).str.strip()
+    students_df["이름"] = students_df["이름"].astype(str).str.strip()
+
     if career_df.empty:
         career_df = pd.DataFrame(columns=["학번", "이름", "희망진로", "관심분야", "희망학과/직업", "상담필요", "메모"])
+    else:
+        required_cols = ["학번", "이름", "희망진로", "관심분야", "희망학과/직업", "상담필요", "메모"]
+        for col in required_cols:
+            if col not in career_df.columns:
+                career_df[col] = ""
+        career_df = career_df[required_cols].copy()
+        career_df["학번"] = career_df["학번"].fillna("").astype(str).str.strip()
+        career_df["이름"] = career_df["이름"].fillna("").astype(str).str.strip()
+        career_df["희망진로"] = career_df["희망진로"].fillna("미정").astype(str)
+        career_df["관심분야"] = career_df["관심분야"].fillna("").astype(str)
+        career_df["희망학과/직업"] = career_df["희망학과/직업"].fillna("").astype(str)
+        career_df["상담필요"] = career_df["상담필요"].fillna(False).astype(bool)
+        career_df["메모"] = career_df["메모"].fillna("").astype(str)
 
     merged = students_df[["학번", "이름"]].copy()
     merged = merged.merge(career_df, on=["학번", "이름"], how="left")
     merged["희망진로"] = merged["희망진로"].fillna("미정")
     merged["관심분야"] = merged["관심분야"].fillna("")
     merged["희망학과/직업"] = merged["희망학과/직업"].fillna("")
-    merged["상담필요"] = merged["상담필요"].fillna(False)
+    merged["상담필요"] = merged["상담필요"].fillna(False).astype(bool)
     merged["메모"] = merged["메모"].fillna("")
 
+    st.session_state.students_df = students_df
     st.session_state.career_df = merged[["학번", "이름", "희망진로", "관심분야", "희망학과/직업", "상담필요", "메모"]]
 
 
